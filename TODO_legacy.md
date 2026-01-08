@@ -1,4 +1,12 @@
-# TODO.md
+# Legacy TODO (PiRowFlo)
+
+This file is preserved from the original PiRowFlo project (2020–2021).
+
+Items listed here reflect the original roadmap and feature goals of PiRowFlo
+and do not represent the current RoFlo project roadmap.
+
+This file is retained for historical reference only.
+
 
 version: 23.02.2021
 
