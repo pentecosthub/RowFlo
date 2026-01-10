@@ -7,8 +7,8 @@ device-neutral fork of PiRowFlo.
 
 ## Phase 1: Baseline Stability
 
-- [ ] Verify project starts without syntax or indentation errors
-- [ ] Confirm `waterrowerthreads.py -h` runs successfully
+- [x] Verify project starts without syntax or indentation errors
+- [x] Confirm `waterrowerthreads.py -h` runs successfully
 - [ ] Identify files that fail on modern Python versions
 - [ ] Create `KNOWN_ISSUES.md`
 - [ ] Tag initial fork state (v0.1)
