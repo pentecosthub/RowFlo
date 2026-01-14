@@ -5,6 +5,9 @@
 # https://github.com/PunchThrough/espresso-ble
 # ---------------------------------------------------------------------------
 #
+global_advertisement = None
+
+
 import logging
 from queue import Empty
 import signal
@@ -505,8 +508,11 @@ def main(out_q,ble_in_q): #out_q
     service_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
     ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
 
-    advertisement = FTMPAdvertisement(bus, 0)
+    global global_advertisement
+    global_advertisement = FTMPAdvertisement(bus, 0)
+    advertisement = global_advertisement
     obj = bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez")
+
 
     agent = Agent(bus, AGENT_PATH)
 
