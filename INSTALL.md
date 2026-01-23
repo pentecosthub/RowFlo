@@ -1,145 +1,134 @@
-# PiRowFlo Installation and Usage Guide
+# PiRowFlo Installation Guide
 
-This document preserves a known working PiRowFlo configuration for Raspberry Pi.
-It exists so you never have to repeat the BLE troubleshooting process again.
+This document describes how to install and run a known working BLE version of PiRowFlo on a Raspberry Pi.
 
-Repository:
-https://github.com/pentecosthub/PiRowFlo
+---
 
-Known working tag:
-pirowflo-working-ble
+## System Requirements
 
---------------------------------------------------
-SUPPORTED HARDWARE
---------------------------------------------------
+- Raspberry Pi with built-in Bluetooth (Pi 3, 4, 5)
+- Raspberry Pi OS (Bookworm or Bullseye)
+- Internet connection
+- WaterRower S4 monitor
+- BLE-compatible rowing app (WaterRower app, ErgData, etc.)
+- https://www.raspberrypi.com/software/ to format an sd card with raspbian
 
-- Raspberry Pi 4 or 5
-- WaterRower with S4 monitor
-- Built-in Raspberry Pi Bluetooth
-- Optional ANT+ USB dongle (receive is limited)
+---
 
---------------------------------------------------
-OPERATING SYSTEM
---------------------------------------------------
+## Installation Steps
 
-- Raspberry Pi OS 64-bit
-- Bluetooth enabled
-- Internet access during install
+### 1. Update system
 
---------------------------------------------------
-INSTALLATION
---------------------------------------------------
-
-1. Update system
-
+```bash
 sudo apt update
 sudo apt upgrade -y
+```
 
-2. Install required packages
+### 2. Install required packages
 
+```bash
 sudo apt install -y git python3 python3-pip python3-dbus python3-gi bluez bluetooth libglib2.0-dev
+```
 
-3. Enable Bluetooth
+### 3. Enable Bluetooth
 
+```bash
 sudo systemctl enable bluetooth
 sudo systemctl start bluetooth
+```
 
-4. Clone repository
+### 4. Clone the PiRowFlo repository
 
+```bash
 git clone https://github.com/pentecosthub/PiRowFlo.git
 cd PiRowFlo
+```
 
-5. Checkout known working release
+### 5. Checkout the known working BLE release
 
+```bash
 git checkout pirowflo-working-ble
+```
 
-6. Install Python dependencies
+### 6. Install Python dependencies
 
+```bash
 pip3 install -r requirements.txt
+```
 
-7. Enable and start PiRowFlo service
+### 7. Enable and start the PiRowFlo service
 
+```bash
 sudo systemctl enable pirowflo
 sudo systemctl start pirowflo
+```
 
---------------------------------------------------
-CORRECT STARTUP ORDER (IMPORTANT)
---------------------------------------------------
+---
 
-1. Power on WaterRower and S4 monitor
-2. Wait until S4 is fully booted
-3. Power on Raspberry Pi
-4. Wait 30 to 60 seconds
-5. Open rowing or fitness app
-6. Scan for Bluetooth devices
-7. Connect to PiRowFlo
+## Startup Order (Important)
 
-BLE advertising may take up to one minute. This is normal.
+1. Power on the WaterRower and ensure the S4 monitor is connected
+2. Power on the Raspberry Pi
+3. Wait 30–60 seconds for Bluetooth advertising to stabilize
+4. Open the rowing app on your phone
+5. Scan for BLE devices and connect to **PiRowFlo**
 
---------------------------------------------------
-BLUETOOTH NOTES
---------------------------------------------------
+Do not panic if the device does not appear immediately. BLE advertising can take up to one minute to become visible.
 
-- Device name: PiRowFlo
-- BLE services:
-  - Fitness Machine (0x1826)
-  - Heart Rate (0x180D)
+---
 
-bluetoothctl may show:
-Discoverable: no
+## Verifying Operation
 
-This does NOT mean BLE advertising is broken.
+To confirm PiRowFlo is running:
 
---------------------------------------------------
-HEART RATE MONITORS
---------------------------------------------------
-
-Bluetooth heart rate straps should be paired to the PHONE or APP, not PiRowFlo.
-
-Correct workflow:
-1. Pair HR strap to phone or app
-2. Connect app to PiRowFlo
-3. App merges rowing and heart rate data
-
---------------------------------------------------
-VERIFICATION
---------------------------------------------------
-
-Check service status:
-
+```bash
 sudo systemctl status pirowflo
+```
 
-Monitor BLE advertising:
+To monitor Bluetooth activity:
 
+```bash
 sudo btmon
+```
 
-You should see:
-- Advertising enabled
-- PiRowFlo name
-- Fitness Machine and Heart Rate UUIDs
+To view service logs:
 
---------------------------------------------------
-RECOVERY
---------------------------------------------------
+```bash
+sudo journalctl -u pirowflo -f
+```
 
-If the SD card fails:
+---
 
-1. Reinstall Raspberry Pi OS
-2. Repeat install steps
-3. Checkout pirowflo-working-ble tag
-4. Do NOT modify BLE code
+## Known Working State
 
---------------------------------------------------
-KNOWN LIMITATIONS
---------------------------------------------------
+This repository includes a Git tag representing a verified working BLE configuration:
 
-- ANT+ heart rate receive not fully implemented
-- BLE advertising may be delayed
-- Bluetooth status output can be misleading
+- Tag: `pirowflo-working-ble`
 
---------------------------------------------------
-MAINTENANCE
---------------------------------------------------
+This tag confirms:
+- BLE advertising is functional
+- GATT services are registered correctly
+- Phone apps can discover and connect
+- No ANT+ heart rate dependency is required
 
-No further changes are required.
-This repository exists to preserve a working state.
+---
+
+## Notes
+
+- Heart rate straps should be paired directly to the phone app, not to PiRowFlo
+- ANT+ receive is not currently supported and should be considered non-functional
+- BLE advertising may take up to 60 seconds after service start
+
+---
+
+## Recovery
+
+If the SD card fails or the system must be rebuilt, repeat the steps in this document and checkout the same tag.
+
+```bash
+git checkout pirowflo-working-ble
+```
+
+This will restore a known-good configuration.
+
+---
