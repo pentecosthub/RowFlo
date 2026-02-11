@@ -1,6 +1,7 @@
 #!/bin/bash
 # RowFlo Installation Script
 # Device-neutral fork - works on any Linux system with Bluetooth support
+
 set -e  # Exit the script if any command fails
 
 echo " "
@@ -11,15 +12,17 @@ echo "=========================================="
 echo " "
 
 # Check if running as root
-if [ "$EUID" -eq 0 ]; then 
+if [ "$EUID" -eq 0 ]; then
    echo "Please do not run this script as root/sudo"
    echo "Run it as your regular user - it will prompt for sudo when needed"
    exit 1
 fi
 
 CURRENT_USER=$(whoami)
+REPO_DIR=$(cd $(dirname $0) > /dev/null 2>&1; pwd -P)
 
 echo "Installing for user: $CURRENT_USER"
+echo "Installation directory: $REPO_DIR"
 echo " "
 
 echo "-------------------------------------------------------------"
@@ -56,7 +59,7 @@ echo "-------------------------------------------------------------"
 echo "Installing Python dependencies..."
 echo "-------------------------------------------------------------"
 venv/bin/pip install --upgrade pip
-venv/bin/pip install -r requirements.txt
+venv/bin/pip install --break-system-packages -r requirements.txt
 
 echo " "
 echo "-------------------------------------------------------------"
@@ -67,50 +70,65 @@ sudo usermod -a -G dialout "$CURRENT_USER"
 
 echo " "
 echo "-------------------------------------------------------------"
+echo "Creating logging configuration..."
+echo "-------------------------------------------------------------"
+cat > src/logging.conf << 'EOF'
+[loggers]
+keys=root
+
+[handlers]
+keys=consoleHandler
+
+[formatters]
+keys=simpleFormatter
+
+[logger_root]
+level=INFO
+handlers=consoleHandler
+
+[handler_consoleHandler]
+class=StreamHandler
+level=INFO
+formatter=simpleFormatter
+args=(sys.stdout,)
+
+[formatter_simpleFormatter]
+format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+EOF
+
+echo " "
+echo "-------------------------------------------------------------"
+echo "Creating systemd service..."
+echo "-------------------------------------------------------------"
+sudo tee /etc/systemd/system/rowflo.service > /dev/null << EOF
+[Unit]
+Description=RowFlo WaterRower BLE Service
+After=network.target bluetooth.target
+
+[Service]
+Type=simple
+User=$CURRENT_USER
+WorkingDirectory=$REPO_DIR
+ExecStart=$REPO_DIR/venv/bin/python3 $REPO_DIR/src/waterrowerthreads.py -i s4 -b
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo " "
+echo "-------------------------------------------------------------"
+echo "Enabling and starting RowFlo service..."
+echo "-------------------------------------------------------------"
+sudo systemctl daemon-reload
+sudo systemctl enable rowflo
+
+echo " "
+echo "-------------------------------------------------------------"
 echo "Setting Bluetooth device name to 'RowFlo'..."
 echo "-------------------------------------------------------------"
 echo "PRETTY_HOSTNAME=RowFlo" | sudo tee /etc/machine-info > /dev/null
-
-echo " "
-echo "-------------------------------------------------------------"
-echo "Configuring web interface on port 9001..."
-echo "-------------------------------------------------------------"
-export repo_dir=$(cd $(dirname $0) > /dev/null 2>&1; pwd -P)
-export python3_path="$repo_dir/venv/bin/python3"
-export supervisord_path=$(which supervisord)
-export supervisorctl_path=$(which supervisorctl)
-
-cp services/supervisord.conf.orig services/supervisord.conf
-sed -i 's@#PYTHON3#@'"$python3_path"'@g' services/supervisord.conf
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/supervisord.conf
-sed -i 's@#USER#@'"$CURRENT_USER"'@g' services/supervisord.conf
-
-echo " "
-echo "-------------------------------------------------------------"
-echo "Setting up systemd service for supervisord..."
-echo "-------------------------------------------------------------"
-cp services/supervisord.service services/supervisord.service.tmp
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/supervisord.service.tmp
-sed -i 's@#SUPERVISORD_PATH#@'"$supervisord_path"'@g' services/supervisord.service.tmp
-sed -i 's@#SUPERVISORCTL_PATH#@'"$supervisorctl_path"'@g' services/supervisord.service.tmp
-sudo mv services/supervisord.service.tmp /etc/systemd/system/supervisord.service
-sudo chown root:root /etc/systemd/system/supervisord.service
-sudo chmod 644 /etc/systemd/system/supervisord.service
-sudo systemctl enable supervisord
-
-echo " "
-echo "-------------------------------------------------------------"
-echo "Updating logging configuration..."
-echo "-------------------------------------------------------------"
-cp src/logging.conf.orig src/logging.conf
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' src/logging.conf
-
-echo " "
-echo "-------------------------------------------------------------"
-echo "Cleaning up temporary files..."
-echo "-------------------------------------------------------------"
-sudo rm -f /tmp/rowflo*
-sudo rm -f /tmp/supervisord.log
 
 echo " "
 echo "=============================================="
@@ -120,14 +138,13 @@ echo " "
 echo "IMPORTANT: You must log out and log back in"
 echo "for group changes to take effect."
 echo " "
-echo "After logging back in, start RowFlo with:"
-echo "  sudo systemctl start supervisord"
+echo "After logging back in, RowFlo will start automatically."
 echo " "
-echo "Access web interface at:"
-echo "  http://$(hostname -I | awk '{print $1}'):9001"
+echo "Useful commands:"
+echo "  sudo systemctl status rowflo    # Check service status"
+echo "  sudo systemctl restart rowflo   # Restart service"
+echo "  sudo journalctl -u rowflo -f    # View live logs"
 echo " "
-echo "Or run manually:"
-echo "  venv/bin/python3 src/waterrowerthreads.py -i s4 -b -a"
+echo "Or run manually for testing:"
+echo "  $REPO_DIR/venv/bin/python3 $REPO_DIR/src/waterrowerthreads.py -i s4 -b"
 echo " "
-
-exit 0
