@@ -129,7 +129,32 @@ echo "-------------------------------------------------------------"
 echo "Setting Bluetooth device name to 'RowFlo'..."
 echo "-------------------------------------------------------------"
 echo "PRETTY_HOSTNAME=RowFlo" | sudo tee /etc/machine-info > /dev/null
+echo " "
+echo "-------------------------------------------------------------"
+echo "Configuring Bluetooth for pairing-free operation..."
+echo "-------------------------------------------------------------"
 
+# Unblock Bluetooth (in case it's blocked)
+sudo rfkill unblock bluetooth
+
+# Start Bluetooth service
+sudo systemctl start bluetooth
+sudo systemctl enable bluetooth
+
+# Wait for Bluetooth to be ready
+sleep 2
+
+# Configure Bluetooth adapter for pairing-free operation
+sudo bluetoothctl <<EOF
+power on
+discoverable on
+pairable on
+agent NoInputNoOutput
+default-agent
+quit
+EOF
+
+echo "Bluetooth configured successfully"
 echo " "
 echo "=============================================="
 echo "  Installation Complete!"
