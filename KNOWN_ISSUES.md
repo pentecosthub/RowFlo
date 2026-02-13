@@ -1,31 +1,51 @@
-# RowFlo v0.1 Known Issues
+# Known Issues
 
-This file documents limitations inherited from PiRowFlo that prevent full device neutrality.
+## Bluetooth Pairing Rejections
 
-## Raspberry Pi Only Components
+**Symptoms:** Apps can discover RowFlo but get "pairing rejected" errors
 
-1. OLED Screen System  
-The screen adapter depends on SPI, luma.oled, and RPi.GPIO. These libraries only exist on Raspberry Pi.
+**Workaround:**
+```bash
+sudo rfkill unblock bluetooth
+sudo bluetoothctl
+power on
+discoverable on
+pairable on
+agent NoInputNoOutput
+default-agent
+quit
+```
 
-2. screen.service  
-The systemd service at services/screen.service assumes Raspberry Pi hardware and will not work on generic Linux.
+**Status:** Investigating automatic configuration in install.sh
 
-3. install.sh modifies Raspberry Pi boot config  
-The installer edits /boot/firmware/config.txt which does not exist on standard Linux systems.
+## Compatibility
 
-## SmartRow
+### Multiple Bluetooth Adapters
 
-SmartRow support is currently disabled due to broken adapter code that does not run on modern Python.
+Using multiple Bluetooth adapters simultaneously (internal + USB) can cause system instability on some hardware.
 
-## What Works
+**Solution:** Use only one Bluetooth adapter at a time
+- Disable internal Bluetooth in BIOS and use USB adapter, OR
+- Use only internal Bluetooth (remove USB adapter)
 
-S4 USB rowing, BLE broadcasting, and ANT+ broadcasting run correctly on generic Linux systems such as Ubuntu 24.04.
+**Tested Working:**
+- Dell Optiplex 3050: USB Bluetooth adapter (internal disabled in BIOS)
+- Raspberry Pi 3B: Internal Bluetooth
 
-## Logging system prevents startup
+### WaterRower S4 USB Detection
 
-On Ubuntu 24.04 and modern Python, RowFlo fails during startup with:
+On some systems, S4 monitor may require specific USB ports for reliable detection.
 
-KeyError: 'formatters'
+**Symptoms:** "port not found" warnings in logs even when S4 is plugged in
 
-The file src/logging.conf is not compatible with Python's logging.config.fileConfig
-format and causes RowFlo to crash before any services start.
+**Workaround:** Try different USB ports, especially USB 2.0 ports
+
+## Reporting Issues
+
+Report issues at: https://github.com/pentecosthub/RowFlo/issues
+
+Include:
+- OS version and hardware platform
+- Output of `sudo journalctl -u rowflo -n 50`
+- Output of `hciconfig -a`
+- Steps to reproduce
