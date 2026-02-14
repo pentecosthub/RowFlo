@@ -16,6 +16,8 @@ see github issues
 
 ## Possible Features
 
+- Almost no chance any of this is going to be takcled
+
 - [ ] Identify user by HRM device ID in order to pick correct user and password for Garmin Connect auto uploader
 - [ ] AutoUpdate/manual function of PiRowFlo 
 - [ ] Second BLE GATT server to passthrough SmartRow data to SmartRow App. Second BLE Server as Bluetooth Passthrough for SmartRow App #26
