@@ -1,212 +1,190 @@
 #!/bin/bash
-# https://stackoverflow.com/questions/9449417/how-do-i-assign-the-output-of-a-command-into-an-array
-
-echo " "
-echo " "
-echo " "
-echo " "
-echo "  PiRowFlo for Waterrower"
-echo "                                                             +-+"
-echo "                                           XX+-----------------+"
-echo "              +-------+                 XXXX    |----|       | |"
-echo "               +-----+                XXX +----------------+ | |"
-echo "               |     |             XXX    |XXXXXXXXXXXXXXXX| | |"
-echo "+--------------X-----X----------+XXX+------------------------+-+"
-echo "|                                                              |"
-echo "+--------------------------------------------------------------+"
-echo " "
-echo " This script will install all the needed packages and modules "
-echo " to make the Waterrower Ant and BLE Raspbery Pi Module working"
-echo " "
+# RowFlo Installation Script
+# Device-neutral fork - works on any Linux system with Bluetooth support
 
 set -e  # Exit the script if any command fails
 
 echo " "
-echo "-------------------------------------------------------------"
-echo "updates the list of latest updates available for the packages"
-echo "-------------------------------------------------------------"
+echo "=========================================="
+echo "  RowFlo for WaterRower"
+echo "  Device-Neutral Installation"
+echo "=========================================="
 echo " "
+
+# Check if running as root
+if [ "$EUID" -eq 0 ]; then
+   echo "Please do not run this script as root/sudo"
+   echo "Run it as your regular user - it will prompt for sudo when needed"
+   exit 1
+fi
+
+CURRENT_USER=$(whoami)
+REPO_DIR=$(cd $(dirname $0) > /dev/null 2>&1; pwd -P)
+
+echo "Installing for user: $CURRENT_USER"
+echo "Installation directory: $REPO_DIR"
+echo " "
+
+echo "-------------------------------------------------------------"
+echo "Updating package list..."
+echo "-------------------------------------------------------------"
 sudo apt-get update
 
 echo " "
-echo "----------------------------------------------"
-echo "install needed packages for python          "
-echo "----------------------------------------------"
-echo " "
-
+echo "-------------------------------------------------------------"
+echo "Installing required system packages..."
+echo "-------------------------------------------------------------"
 sudo apt-get install -y \
     python3 \
     python3-gi \
     python3-gi-cairo \
     gir1.2-gtk-3.0 \
     python3-pip \
-    libatlas-base-dev \
+    python3-venv \
     libdbus-1-dev \
     libglib2.0-dev \
     libgirepository1.0-dev \
     libcairo2-dev \
-    zlib1g-dev \
-    libfreetype6-dev \
-    liblcms2-dev \
-    libopenjp2-7 \
-    libtiff6
+    bluetooth \
+    bluez
 
 echo " "
-echo "----------------------------------------------"
-echo "set up virtual environment        "
-echo "----------------------------------------------"
-echo " "
-
+echo "-------------------------------------------------------------"
+echo "Creating Python virtual environment..."
+echo "-------------------------------------------------------------"
 python3 -m venv venv
-source venv/bin/activate
 
 echo " "
-echo "----------------------------------------------"
-echo "install needed python3 modules for the project        "
-echo "----------------------------------------------"
-echo " "
-
-pip install --upgrade pip
-pip install -r requirements.txt
+echo "-------------------------------------------------------------"
+echo "Installing Python dependencies..."
+echo "-------------------------------------------------------------"
+venv/bin/pip install --upgrade pip
+venv/bin/pip install --break-system-packages -r requirements.txt
 
 echo " "
-echo "-------------------------------------------------------"
-echo "check for Ant+ dongle in order to set udev rules       "
-echo "Load the Ant+ dongle with FTDI driver                  "
-echo "and ensure that the user pi has access to              "
-echo "-------------------------------------------------------"
-echo " "
-
-# https://unix.stackexchange.com/questions/67936/attaching-usb-serial-device-with-custom-pid-to-ttyusb0-on-embedded
-
-IFS=$'\n'
-arrayusb=($(lsusb | cut -d " " -f 6 | cut -d ":" -f 2))
-
-for i in "${arrayusb[@]}"
-do
-  if [ $i == 1008 ]|| [ $i == 1009 ] || [ $i == 1004 ]; then
-    echo "Ant dongle found"
-    echo 'ACTION=="add", ATTRS{idVendor}=="0fcf", ATTRS{idProduct}=="'$i'", RUN+="/sbin/modprobe ftdi_sio" RUN+="/bin/sh -c '"'echo 0fcf 1008 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id'\""'' > /etc/udev/rules.d/99-garmin.rules
-    echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="'$i'", MODE="666"' >> /etc/udev/rules.d/99-garmin.rules
-    echo "udev rule written to /etc/udev/rules.d/99-garmin.rules"
-    break
-  else
-    echo "No Ant stick found !"
-  fi
-
-done
-unset IFS
-
-echo "----------------------------------------------"
-echo " Add current user to bluetooth and dialout groups"
-echo " (pirowflo should be run by this user) "
-echo "----------------------------------------------"
-
-CURRENT_USER=$(whoami)
+echo "-------------------------------------------------------------"
+echo "Adding user to required groups..."
+echo "-------------------------------------------------------------"
 sudo usermod -a -G bluetooth "$CURRENT_USER"
 sudo usermod -a -G dialout "$CURRENT_USER"
 
 echo " "
-echo "-----------------------------------------------"
-echo " Change bluetooth name of the pi to PiRowFlo"
-echo "-----------------------------------------------"
-echo " "
+echo "-------------------------------------------------------------"
+echo "Creating logging configuration..."
+echo "-------------------------------------------------------------"
+cat > src/logging.conf << 'EOF'
+[loggers]
+keys=root
 
-echo "PRETTY_HOSTNAME=PiRowFlo" | sudo tee -a /etc/machine-info > /dev/null
-#echo "PRETTY_HOSTNAME=S4 Comms PI" | sudo tee -a /etc/machine-info > /dev/null
+[handlers]
+keys=consoleHandler
 
+[formatters]
+keys=simpleFormatter
 
+[logger_root]
+level=INFO
+handlers=consoleHandler
 
+[handler_consoleHandler]
+class=StreamHandler
+level=INFO
+formatter=simpleFormatter
+args=(sys.stdout,)
 
-echo " "
-echo "------------------------------------------------------"
-echo " configuring web interface on http://${HOSTNAME}:9001 "
-echo "------------------------------------------------------"
-echo " "
-
-# generate supervisord.conf from supervisord.conf.orig with updated paths
-#
-export repo_dir=$(cd $(dirname $0) > /dev/null 2>&1; pwd -P)
-export python3_path=$(which python3)
-export supervisord_path=$(which supervisord)
-export supervisorctl_path=$(which supervisorctl)
-
-cp services/supervisord.conf.orig services/supervisord.conf
-sed -i 's@#PYTHON3#@'"$python3_path"'@g' services/supervisord.conf
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/supervisord.conf
-sed -i 's@#USER#@'"$CURRENT_USER"'@g' services/supervisord.conf
-
-# configure a systemd service to start supervisord automatically at boot
-#
-cp services/supervisord.service services/supervisord.service.tmp
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/supervisord.service.tmp
-sed -i 's@#SUPERVISORD_PATH#@'"$supervisord_path"'@g' services/supervisord.service.tmp
-sed -i 's@#SUPERVISORCTL_PATH#@'"$supervisorctl_path"'@g' services/supervisord.service.tmp
-sudo mv services/supervisord.service.tmp /etc/systemd/system/supervisord.service
-sudo chown root:root /etc/systemd/system/supervisord.service
-sudo chmod 655 /etc/systemd/system/supervisord.service
-sudo systemctl enable supervisord
-sudo rm -f /tmp/pirowflo*
-sudo rm -f /tmp/supervisord.log
+[formatter_simpleFormatter]
+format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+EOF
 
 echo " "
-echo "------------------------------------------------------------"
-echo " Update bluetooth settings according to Apple specifications"
-echo "------------------------------------------------------------"
-echo " "
-# update bluetooth configuration and start supervisord from rc.local
-#
-cp services/update-bt-cfg.service services/update-bt-cfg.service.tmp
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/update-bt-cfg.service.tmp
-sudo mv services/update-bt-cfg.service.tmp /etc/systemd/system/update-bt-cfg.service
-sudo chown root:root /etc/systemd/system/update-bt-cfg.service
-sudo chmod 655 /etc/systemd/system/update-bt-cfg.service
-sudo systemctl enable update-bt-cfg
+echo "-------------------------------------------------------------"
+echo "Creating systemd service..."
+echo "-------------------------------------------------------------"
+sudo tee /etc/systemd/system/rowflo.service > /dev/null << EOF
+[Unit]
+Description=RowFlo WaterRower BLE Service
+After=network.target bluetooth.target
 
+[Service]
+Type=simple
+User=$CURRENT_USER
+WorkingDirectory=$REPO_DIR
+ExecStart=$REPO_DIR/venv/bin/python3 $REPO_DIR/src/waterrowerthreads.py -i s4 -b
+Restart=on-failure
+RestartSec=10
 
-echo " "
-echo "------------------------------------------------------------"
-echo " setup screen setting to start up at boot                   "
-echo "------------------------------------------------------------"
-echo " "
-
-sudo sed -i 's/#dtparam=spi=on/dtparam=spi=on/g' /boot/firmware/config.txt
-cp src/adapters/screen/settings.ini.orig src/adapters/screen/settings.ini
-sudo sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' src/adapters/screen/settings.ini
-
-cp services/screen.service services/screen.service.tmp
-sed -i 's@#PYTHON3#@'"$python3_path"'@g' services/screen.service.tmp
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' services/screen.service.tmp
-sed -i 's@#USER#@'"$CURRENT_USER"'@g' services/screen.service.tmp
-sudo mv services/screen.service.tmp /etc/systemd/system/screen.service
-sudo chown root:root /etc/systemd/system/screen.service
-sudo chmod 655 /etc/systemd/system/screen.service
-sudo systemctl enable screen
+[Install]
+WantedBy=multi-user.target
+EOF
 
 echo " "
-echo "-----------------------------------------------"
-echo " update bluart file as it prevents the start of"
-echo " internal bluetooth if usb bluetooth dongle is "
-echo " present                                       "
-echo "-----------------------------------------------"
-echo " "
-
-sudo sed -i 's/hci0/hci2/g' /usr/bin/btuart
+echo "-------------------------------------------------------------"
+echo "Enabling and starting RowFlo service..."
+echo "-------------------------------------------------------------"
+sudo systemctl daemon-reload
+sudo systemctl enable rowflo
 
 echo " "
-echo "----------------------------------------------"
-echo " Add absolut path to the logging.conf file    "
-echo "----------------------------------------------"
+echo "-------------------------------------------------------------"
+echo "Setting Bluetooth device name to 'RowFlo'..."
+echo "-------------------------------------------------------------"
+echo "PRETTY_HOSTNAME=RowFlo" | sudo tee /etc/machine-info > /dev/null
 echo " "
+echo "-------------------------------------------------------------"
+echo "Configuring Bluetooth for pairing-free operation..."
+echo "-------------------------------------------------------------"
 
-cp src/logging.conf.orig src/logging.conf
-sed -i 's@#REPO_DIR#@'"$repo_dir"'@g' src/logging.conf
+# Unblock Bluetooth (in case it's blocked)
+if command -v rfkill &> /dev/null; then
+    sudo rfkill unblock bluetooth
+    echo "Bluetooth unblocked via rfkill"
+else
+    echo "rfkill not available - skipping (Bluetooth may already be active)"
+fi
+
+# Start Bluetooth service
+sudo systemctl start bluetooth
+sudo systemctl enable bluetooth
+
+# Wait for Bluetooth to be ready
+sleep 2
+
+# Configure Bluetooth adapter for pairing-free operation
+sudo bluetoothctl <<EOF
+power on
+discoverable on
+pairable on
+agent NoInputNoOutput
+default-agent
+quit
+EOF
+echo "Bluetooth configured successfully"
 
 echo " "
-echo "----------------------------------------------"
-echo " installation done ! rebooting in 3, 2, 1 "
-echo "----------------------------------------------"
-sleep 3
+echo "-------------------------------------------------------------"
+echo "Making Bluetooth permanently discoverable..."
+echo "-------------------------------------------------------------"
+
+# Make Bluetooth always discoverable (required for BLE advertisements)
+if ! grep -q "DiscoverableTimeout" /etc/bluetooth/main.conf 2>/dev/null; then
+    sudo sed -i '/^\[General\]/a DiscoverableTimeout = 0' /etc/bluetooth/main.conf
+    if ! grep -q "DiscoverableTimeout" /etc/bluetooth/main.conf 2>/dev/null; then
+        echo "" | sudo tee -a /etc/bluetooth/main.conf > /dev/null
+        echo "[General]" | sudo tee -a /etc/bluetooth/main.conf > /dev/null
+        echo "DiscoverableTimeout = 0" | sudo tee -a /etc/bluetooth/main.conf > /dev/null
+        echo "Discoverable = true" | sudo tee -a /etc/bluetooth/main.conf > /dev/null
+    fi
+    sudo systemctl restart bluetooth
+    sleep 2
+    echo "Bluetooth configured to be always discoverable"
+else
+    echo "Bluetooth already configured as discoverable"
+fi
+echo " "
+echo "=============================================="
+echo "  System will reboot in 10 seconds..."
+echo "  Press Ctrl+C to cancel"
+echo "=============================================="
+echo " "
+sleep 10
 sudo reboot
-echo " "
-exit 0
