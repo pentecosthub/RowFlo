@@ -1,5 +1,5 @@
 """
-Python script to broadcast WaterRower data over BLE 
+Python script to broadcast WaterRower data over BLE and ANT+
 
 RowFlo (device-neutral fork of PiRowFlo)
 
@@ -23,6 +23,8 @@ import pathlib
 import signal
 
 from adapters.ble import waterrowerble
+from adapters.s4 import wrtobleant
+from adapters.ant import waterrowerant
 
 loggerconfigpath = str(pathlib.Path(__file__).parent.absolute()) + "/logging.conf"
 
@@ -45,24 +47,31 @@ class Graceful:
 def main(args):
     logging.config.fileConfig(loggerconfigpath, disable_existing_loggers=False)
     grace = Graceful()
-    
+
     def BleService(out_q, ble_in_q):
         logger.info("Starting BLE advertise and GATT server")
         service = waterrowerble.main(out_q, ble_in_q)
         service()
-    
-    def Waterrower(in_q, ble_out_q):
+
+    def Waterrower(in_q, ble_out_q, ant_out_q):
         logger.info("Starting S4 WaterRower interface")
-        service = waterrowerble.main(in_q, ble_out_q)
+        service = wrtobleant.main(in_q, ble_out_q, ant_out_q)
         service()
+
+    def ANTService(in_q, ant_in_q):
+        logger.info("Starting ANT+ service")
+        service = waterrowerant.main(in_q, ant_in_q)
+        service()
+
+    q = Queue()
     ble_q = deque(maxlen=1)
-    q = deque(maxlen=1)
+    ant_q = deque(maxlen=1)
     threads = []
-    
-    # main Waterrower interface
+
+    # Interface selection
     if args.interface == "s4":
         logger.info("Interface selected: S4 monitor")
-        t = threading.Thread(target=Waterrower, args=(q, ble_q), daemon=True)
+        t = threading.Thread(target=Waterrower, args=(q, ble_q, ant_q), daemon=True)
         t.start()
         threads.append(t)
 
@@ -81,6 +90,14 @@ def main(args):
         threads.append(t)
     else:
         logger.info("BLE service not enabled")
+
+    # ANT+ service
+    if args.antfe:
+        t = threading.Thread(target=ANTService, args=(q, ant_q), daemon=True)
+        t.start()
+        threads.append(t)
+    else:
+        logger.info("ANT+ service not enabled")
 
     # Main loop
     while grace.run:
@@ -108,6 +125,12 @@ if __name__ == "__main__":
         "--blue",
         action="store_true",
         help="Broadcast WaterRower data over Bluetooth Low Energy",
+    )
+    parser.add_argument(
+        "-a",
+        "--antfe",
+        action="store_true",
+        help="Broadcast WaterRower data over ANT+",
     )
 
     args = parser.parse_args()
